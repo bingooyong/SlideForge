@@ -71,6 +71,7 @@ docker-compose up -d
 - 访问：<http://127.0.0.1:8000>（前端 + API），API 文档：<http://127.0.0.1:8000/docs>。
 - 上传与任务文件：`./uploads`（宿主机）。
 - 构建镜像：`docker build -t slideforge:latest .`；可推送到 Docker Hub 供他人 `docker pull` 后直接运行。
+- **预构建镜像**：推送到 `main` 分支后，GitHub Actions 会自动构建并推送到 `ghcr.io/bingooyong/slideforge:latest`，他人可直接 `docker pull ghcr.io/bingooyong/slideforge:latest` 运行。
 
 ### 本地一键打包启动
 
