@@ -1,0 +1,55 @@
+CLAUDE.md
+archive/
+demo.html
+nblm-video/
+
+# IDE / 工具专用（无需提交到开源仓库）
+.apm/
+.claude/
+.cursor/
+.opencode/
+.vscode/
+
+# Python 虚拟环境
+.venv/
+venv/
+env/
+
+# Python 缓存与构建
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Node / 前端
+frontend/node_modules/
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# 后端上传与任务产出（可含用户数据）
+backend/uploads/
+# 前端构建产物（一键脚本生成，由后端挂载）
+backend/static/
+# 测试与验证产出
+backend/.coverage
+backend/test_slide_cleaned.png
+backend/test_slide_v2.pptx
+backend/verify_schema_v2_out.pptx
+
+# 本地 / 环境
+.env
+backend/.env
+.env.local
+.env.*.local
+*.log
+backend/logs/
+.local_assets/
+.DS_Store

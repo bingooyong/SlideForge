@@ -1,0 +1,460 @@
+openapi: 3.0.3
+info:
+  title: SlideForge API
+  description: |
+    API for converting images/PDFs to editable PPTX files.
+    Supports upload, real-time progress tracking via WebSocket, and PPTX export.
+  version: 1.0.0
+  contact:
+    name: SlideForge Project
+    url: https://github.com/slideforge
+servers:
+  - url: https://api.slideforge.com
+    description: Production server
+  - url: http://localhost:3000
+    description: Local development server
+
+tags:
+  - name: Upload
+    description: File upload operations
+  - name: Tasks
+    description: Task management and status
+  - name: Export
+    description: PPTX export operations
+  - name: WebSocket
+    description: Real-time progress updates
+
+paths:
+  /upload:
+    post:
+      tags:
+        - Upload
+      summary: Upload image or PDF file for processing
+      operationId: uploadFile
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image (JPG/PNG/WebP/BMP) or PDF file
+                mode:
+                  type: string
+                  enum: [lite, standard]
+                  default: standard
+                  description: Processing mode - lite (fast, no style) or standard (full style)
+                aspectRatio:
+                  type: string
+                  enum: ["16:9", "9:16", "4:3"]
+                  default: "16:9"
+                  description: Output slide aspect ratio
+                apiKey:
+                  type: string
+                  description: Gemini API key for processing
+        required:
+          - file
+      responses:
+        '202':
+          description: File accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tasks/{taskId}:
+    get:
+      tags:
+        - Tasks
+      summary: Get task status and progress
+      operationId: getTaskStatus
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Task ID returned from upload
+      responses:
+        '200':
+          description: Task status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStatus'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tasks/{taskId}/retry:
+    post:
+      tags:
+        - Tasks
+      summary: Retry failed pages for a task
+      operationId: retryFailedPages
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Task ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pageIndexes:
+                  type: array
+                  items:
+                    type: integer
+                  description: Array of page indexes to retry
+        required:
+          - pageIndexes
+      responses:
+        '202':
+          description: Retry initiated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /export/{taskId}:
+    get:
+      tags:
+        - Export
+      summary: Download processed PPTX file
+      operationId: exportPPTX
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Task ID
+      responses:
+        '200':
+          description: PPTX file stream
+          content:
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="presentation.pptx"'
+        '202':
+          $ref: '#/components/responses/TaskNotReady'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  schemas:
+    UploadResponse:
+      type: object
+      properties:
+        taskId:
+          type: string
+          format: uuid
+          description: Unique task identifier
+        filename:
+          type: string
+          description: Original filename
+        pageCount:
+          type: integer
+          description: Number of pages/pages detected
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+          description: Initial task status
+      required:
+        - taskId
+        - filename
+        - pageCount
+        - status
+
+    TaskStatus:
+      type: object
+      properties:
+        taskId:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Overall progress percentage
+        currentPage:
+          type: integer
+          description: Currently processing page index (0-based)
+        totalPages:
+          type: integer
+        stage:
+          type: string
+          enum: [uploading, processing, synthesizing, completed]
+          description: Current processing stage
+        failedPages:
+          type: array
+          items:
+            type: integer
+          description: List of failed page indexes
+        result:
+          $ref: '#/components/schemas/SlideDocument'
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+      required:
+        - taskId
+        - status
+
+    SlideDocument:
+      type: object
+      description: Slide document structure (引用 Task 1.1 Schema)
+      properties:
+        version:
+          type: string
+          pattern: '^\\d+\\.\\d+\\.\\d+$'
+        title:
+          type: string
+        slides:
+          type: array
+          items:
+            $ref: '#/components/schemas/Slide'
+        globalStyle:
+          $ref: '#/components/schemas/StyleInfo'
+
+    Slide:
+      type: object
+      properties:
+        id:
+          type: string
+        index:
+          type: integer
+        aspectRatio:
+          type: string
+          enum: ["16:9", "9:16", "4:3"]
+        style:
+          $ref: '#/components/schemas/StyleInfo'
+        background:
+          oneOf:
+            - type: string
+            - type: object
+        blocks:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/TextBlock'
+              - $ref: '#/components/schemas/ImageBlock'
+
+    TextBlock:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: text
+        content:
+          type: string
+        box:
+          $ref: '#/components/schemas/Box2D'
+        style:
+          $ref: '#/components/schemas/TextStyle'
+        zIndex:
+          type: integer
+
+    ImageBlock:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          const: image
+        resourceType:
+          type: string
+          enum: [id, base64, url]
+        resource:
+          type: string
+        box:
+          $ref: '#/components/schemas/Box2D'
+        opacity:
+          type: number
+        zIndex:
+          type: integer
+
+    Box2D:
+      type: object
+      properties:
+        x:
+          type: number
+        y:
+          type: number
+        w:
+          type: number
+        h:
+          type: number
+
+    TextStyle:
+      type: object
+      properties:
+        fontSize:
+          type: number
+        fontWeight:
+          type: string
+        fontColor:
+          type: string
+        textAlign:
+          type: string
+        verticalAlign:
+          type: string
+
+    StyleInfo:
+      type: object
+      properties:
+        primaryColor:
+          type: string
+        backgroundColor:
+          type: string
+        accentColors:
+          type: array
+          items:
+            type: string
+        fontFamily:
+          type: string
+
+    ErrorDetail:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Error code (e.g., FILE_TOO_LARGE, INVALID_FORMAT, PROCESSING_FAILED)
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          description: Additional error details
+      required:
+        - code
+        - message
+
+    WebSocketProgress:
+      type: object
+      description: WebSocket progress message format
+      properties:
+        taskId:
+          type: string
+          format: uuid
+          description: Task identifier
+        pageIndex:
+          type: integer
+          description: Current page being processed (0-based)
+        totalPages:
+          type: integer
+          description: Total number of pages
+        stage:
+          type: string
+          enum: [uploading, processing, synthesizing, completed]
+          description: Current processing stage
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Progress percentage
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+          description: Task status (enables frontend to distinguish completed vs failed)
+        message:
+          type: string
+          description: Optional status message
+      required:
+        - taskId
+        - pageIndex
+        - totalPages
+        - stage
+        - progress
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+    PayloadTooLarge:
+      description: File too large
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+    TaskNotReady:
+      description: Task not ready for export (still processing)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorDetail'
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+security:
+  - ApiKeyAuth: []
+
+websockets:
+  /ws/progress:
+    summary: Real-time task progress WebSocket
+    description: |
+      Connect to receive real-time progress updates for processing tasks.
+      Query parameter `task_id` is required.
+    parameters:
+      - name: task_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Task ID to subscribe to progress updates
+    messages:
+      - schema:
+          $ref: '#/components/schemas/WebSocketProgress'
+        example:
+          taskId: "123e4567-e89b-12d3-a456-426614174000"
+          pageIndex: 2
+          totalPages: 10
+          stage: "processing"
+          progress: 25
+          message: "Processing page 3 of 10"

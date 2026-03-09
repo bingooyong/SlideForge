@@ -1,0 +1,36 @@
+# SlideForge 全栈服务（前端 + API）
+# 用法：GEMINI_API_KEY=你的Key docker-compose up -d
+# 构建：docker-compose build
+# 访问：http://127.0.0.1:8000
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: slideforge:latest
+    container_name: slideforge
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_LAYOUT_MODEL=${GEMINI_LAYOUT_MODEL:-gemini-2.5-flash}
+      - GEMINI_MAX_RPM=${GEMINI_MAX_RPM:-5}
+      - UPLOAD_DIR=/app/uploads
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - PIPELINE_MAX_WORKERS=${PIPELINE_MAX_WORKERS:-3}
+    volumes:
+      - nblm2pptx_uploads:/app/uploads
+      - nblm2pptx_logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  slideforge_uploads:
+  slideforge_logs:

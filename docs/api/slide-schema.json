@@ -1,0 +1,310 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://slideforge.github.io/schemas/slide-schema.json",
+  "version": "1.0.0",
+  "title": "Slide Schema for SlideForge",
+  "description": "Schema for defining slide structure, text blocks, image blocks, and styles. Used by Pipeline, Frontend, and PPTX synthesis.",
+  "definitions": {
+    "StyleInfo": {
+      "type": "object",
+      "title": "StyleInfo",
+      "description": "Theme colors and styling information for a slide",
+      "properties": {
+        "primaryColor": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "description": "Primary theme color in hex format"
+        },
+        "backgroundColor": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "description": "Background color in hex format"
+        },
+        "accentColors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$"
+          },
+          "minItems": 3,
+          "maxItems": 5,
+          "description": "Accent theme colors (3-5 colors) in hex format"
+        },
+        "fontFamily": {
+          "type": "string",
+          "description": "Default font family for text blocks"
+        }
+      },
+      "required": ["primaryColor", "backgroundColor"],
+      "additionalProperties": false
+    },
+    "Box2D": {
+      "type": "object",
+      "title": "Box2D",
+      "description": "2D bounding box with position and dimensions",
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Normalized X coordinate (0-1, relative to slide width)"
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Normalized Y coordinate (0-1, relative to slide height)"
+        },
+        "w": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Normalized width (0-1, relative to slide width)"
+        },
+        "h": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Normalized height (0-1, relative to slide height)"
+        }
+      },
+      "required": ["x", "y", "w", "h"],
+      "additionalProperties": false
+    },
+    "TextStyle": {
+      "type": "object",
+      "title": "TextStyle",
+      "description": "Text styling properties",
+      "properties": {
+        "fontSize": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Font size in points"
+        },
+        "fontWeight": {
+          "type": "string",
+          "enum": ["normal", "bold", "lighter", "bolder"],
+          "description": "Font weight (Standard mode only)"
+        },
+        "fontColor": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "description": "Font color in hex format (Standard mode only)"
+        },
+        "textAlign": {
+          "type": "string",
+          "enum": ["left", "center", "right", "justify"],
+          "default": "left",
+          "description": "Text alignment"
+        },
+        "verticalAlign": {
+          "type": "string",
+          "enum": ["top", "middle", "bottom"],
+          "default": "top",
+          "description": "Vertical text alignment"
+        }
+      },
+      "required": ["fontSize"],
+      "additionalProperties": false
+    },
+    "TextBlock": {
+      "type": "object",
+      "title": "TextBlock",
+      "description": "Text content block with position and styling",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the text block"
+        },
+        "type": {
+          "type": "string",
+          "const": "text"
+        },
+        "content": {
+          "type": "string",
+          "description": "Text content (supports multiline)"
+        },
+        "box": {
+          "$ref": "#/definitions/Box2D",
+          "description": "Bounding box position and dimensions"
+        },
+        "style": {
+          "$ref": "#/definitions/TextStyle",
+          "description": "Text styling (Lite mode: fontSize only; Standard mode: full styling)"
+        },
+        "zIndex": {
+          "type": "integer",
+          "default": 1,
+          "description": "Layer order (higher values render on top)"
+        }
+      },
+      "required": ["id", "type", "content", "box"],
+      "additionalProperties": false
+    },
+    "ImageBlock": {
+      "type": "object",
+      "title": "ImageBlock",
+      "description": "Image resource block with position",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the image block"
+        },
+        "type": {
+          "type": "string",
+          "const": "image"
+        },
+        "resourceType": {
+          "type": "string",
+          "enum": ["id", "base64", "url"],
+          "description": "How the image is referenced"
+        },
+        "resource": {
+          "type": "string",
+          "description": "Image data: resource ID (if type=id), base64 string (if type=base64), or URL (if type=url)"
+        },
+        "box": {
+          "$ref": "#/definitions/Box2D",
+          "description": "Bounding box position and dimensions"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 1,
+          "description": "Image opacity (0-1)"
+        },
+        "zIndex": {
+          "type": "integer",
+          "default": 0,
+          "description": "Layer order (higher values render on top)"
+        }
+      },
+      "required": ["id", "type", "resourceType", "resource", "box"],
+      "additionalProperties": false
+    },
+    "Slide": {
+      "type": "object",
+      "title": "Slide",
+      "description": "A single slide with background, blocks, and styling",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the slide"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Slide index (0-based)"
+        },
+        "aspectRatio": {
+          "type": "string",
+          "enum": ["16:9", "9:16", "4:3"],
+          "default": "16:9",
+          "description": "Slide aspect ratio"
+        },
+        "style": {
+          "$ref": "#/definitions/StyleInfo",
+          "description": "Slide theme colors and styling"
+        },
+        "background": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^#[0-9A-Fa-f]{6}$",
+              "description": "Solid background color"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "image"
+                },
+                "resourceType": {
+                  "type": "string",
+                  "enum": ["id", "base64", "url"]
+                },
+                "resource": {
+                  "type": "string"
+                },
+                "opacity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "default": 1
+                }
+              },
+              "required": ["type", "resourceType", "resource"],
+              "description": "Background image"
+            }
+          ],
+          "description": "Slide background (color or image)"
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "$ref": "#/definitions/TextBlock" },
+              { "$ref": "#/definitions/ImageBlock" }
+            ]
+          },
+          "description": "Array of content blocks (text and image)"
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "sourcePage": {
+              "type": "integer",
+              "description": "Original source page number"
+            },
+            "mode": {
+              "type": "string",
+              "enum": ["lite", "standard"],
+              "description": "Processing mode (lite=minimal fields, standard=full fields)"
+            },
+            "ocrConfidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "OCR confidence score (Standard mode only)"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "index", "blocks"],
+      "additionalProperties": false
+    },
+    "SlideDocument": {
+      "type": "object",
+      "title": "SlideDocument",
+      "description": "Complete slide document containing multiple slides",
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Schema version (e.g., 1.0.0)"
+        },
+        "title": {
+          "type": "string",
+          "description": "Document title"
+        },
+        "slides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Slide"
+          },
+          "description": "Array of slides"
+        },
+        "globalStyle": {
+          "$ref": "#/definitions/StyleInfo",
+          "description": "Global style applied to all slides (overridden by slide-level style)"
+        }
+      },
+      "required": ["version", "slides"],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/definitions/SlideDocument"
+}

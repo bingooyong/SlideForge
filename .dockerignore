@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Python
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+
+# Node
+node_modules
+frontend/node_modules
+frontend/dist
+
+# 构建产物与本地
+backend/static
+backend/uploads
+uploads
+*.log
+.env
+.env.local
+
+# 文档与测试
+docs
+*.md
+!README.md
+backend/tests
+tests
+
+# 其他
+.DS_Store
+*.local
